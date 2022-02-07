@@ -45,6 +45,7 @@ type Props = {
     tutorialCategory: string;
     onNextNavigateTo?: () => void;
     onPrevNavigateTo?: () => void;
+    onDismiss?: () => void;
     autoTour?: boolean;
     pulsatingDotPlacement?: Omit<Placement, 'auto'| 'auto-end'>;
     pulsatingDotTranslate?: {x: number; y: number};
@@ -63,11 +64,12 @@ const TutorialTourTip = ({
     step,
     onNextNavigateTo,
     onPrevNavigateTo,
+    onDismiss,
     telemetryTag,
-    showOptOut,
     pulsatingDotTranslate,
     pulsatingDotPlacement,
     placement = 'right-start',
+    showOptOut = true,
     stopPropagation = true,
     preventDefault = true,
     width = 320,
@@ -78,7 +80,6 @@ const TutorialTourTip = ({
         show,
         tourSteps,
         handleOpen,
-        handleHide,
         handleDismiss,
         handleNext,
         handlePrevious,
@@ -92,6 +93,7 @@ const TutorialTourTip = ({
         tutorialCategory,
         onNextNavigateTo,
         onPrevNavigateTo,
+        onDismiss,
         stopPropagation,
         preventDefault,
     });
@@ -120,8 +122,8 @@ const TutorialTourTip = ({
         if (step === lastStep) {
             buttonText = (
                 <FormattedMessage
-                    id={'tutorial_tip.finish_tour'}
-                    defaultMessage={'Finish tour'}
+                    id={'tutorial_tip.done'}
+                    defaultMessage={'Done'}
                 />
             );
         }
@@ -239,7 +241,7 @@ const TutorialTourTip = ({
             </div>
             <TourTipOverlay
                 show={show}
-                onClick={handleHide}
+                onClick={handleDismiss}
             >
                 <TutorialTourTipBackdrop
                     x={punchOut?.x}

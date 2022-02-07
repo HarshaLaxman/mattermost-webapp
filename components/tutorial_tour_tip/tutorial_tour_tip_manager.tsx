@@ -12,7 +12,13 @@ import {savePreferences as storeSavePreferences} from 'mattermost-redux/actions/
 import {getCurrentUserId} from 'mattermost-redux/selectors/entities/common';
 import {trackEvent as trackEventAction} from 'actions/telemetry_actions';
 
-import {FINISHED, SKIPPED, TTCategoriesMapToSteps} from './constant';
+import {
+    AutoTourStatus,
+    FINISHED,
+    SKIPPED,
+    TTCategoriesMapToAutoTourStatusKey,
+    TTCategoriesMapToSteps,
+} from './constant';
 
 import * as Utils from './utils';
 
@@ -21,7 +27,6 @@ export interface TutorialTourTipManager {
     tourSteps: Record<string, number>;
     getLastStep: () => number;
     handleOpen: (e: React.MouseEvent) => void;
-    handleHide: (e: React.MouseEvent) => void;
     handleSkipTutorial: (e: React.MouseEvent) => void;
     handleDismiss: (e: React.MouseEvent) => void;
     handleSavePreferences: (step: number) => void;
@@ -36,6 +41,7 @@ type Props = {
     step: number;
     onNextNavigateTo?: () => void;
     onPrevNavigateTo?: () => void;
+    onDismiss?: () => void;
     stopPropagation?: boolean;
     preventDefault?: boolean;
 }
@@ -46,6 +52,7 @@ const useTutorialTourTipManager = ({
     tutorialCategory,
     onNextNavigateTo,
     onPrevNavigateTo,
+    onDismiss,
     stopPropagation,
     preventDefault,
 }: Props): TutorialTourTipManager => {
@@ -56,9 +63,11 @@ const useTutorialTourTipManager = ({
     const dispatch = useDispatch();
     const currentUserId = useSelector(getCurrentUserId);
     const currentStep = useSelector((state: GlobalState) => getInt(state, tutorialCategory, currentUserId, 0));
+    const autoTourStatus = useSelector((state: GlobalState) => getInt(state, TTCategoriesMapToAutoTourStatusKey[tutorialCategory], currentUserId, 0));
+    const isAutoTourEnabled = autoTourStatus === AutoTourStatus.ENABLED;
     const savePreferences = useCallback(
-        (currentUserId: string, stepValue: string) => {
-            const preferences = [
+        (currentUserId: string, stepValue: string, autoTour = true) => {
+            let preferences = [
                 {
                     user_id: currentUserId,
                     category: tutorialCategory,
@@ -66,6 +75,16 @@ const useTutorialTourTipManager = ({
                     value: stepValue,
                 },
             ];
+            if (TTCategoriesMapToAutoTourStatusKey[tutorialCategory]) {
+                preferences = [...preferences,
+                    {
+                        user_id: currentUserId,
+                        category: TTCategoriesMapToAutoTourStatusKey[tutorialCategory],
+                        name: currentUserId,
+                        value: (autoTour ? AutoTourStatus.ENABLED : AutoTourStatus.DISABLED).toString(),
+                    },
+                ];
+            }
             dispatch(storeSavePreferences(currentUserId, preferences));
         },
         [dispatch],
@@ -87,10 +106,10 @@ const useTutorialTourTipManager = ({
     };
 
     useEffect(() => {
-        if (autoTour) {
+        if (autoTour && isAutoTourEnabled) {
             setShow(true);
         }
-    }, [autoTour]);
+    }, [autoTour, isAutoTourEnabled]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent): void => {
@@ -103,10 +122,7 @@ const useTutorialTourTipManager = ({
             window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const handleHide = (e?: React.MouseEvent): void => {
-        if (e) {
-            handleEventPropagationAndDefault(e);
-        }
+    const handleHide = (): void => {
         setShow(false);
     };
 
@@ -118,14 +134,15 @@ const useTutorialTourTipManager = ({
     const handleDismiss = (e: React.MouseEvent): void => {
         handleEventPropagationAndDefault(e);
         handleHide();
-
-        // open for discussion should we move forward if user dismiss like next time show them next tip instead of the same one.
-        handleNext(e);
+        if (onDismiss) {
+            onDismiss();
+        }
         const tag = telemetryTag + '_dismiss';
         trackEvent('tutorial', tag);
+        handleSavePreferences(currentStep, false);
     };
 
-    const handleSavePreferences = (nextStep: boolean | number): void => {
+    const handleSavePreferences = (nextStep: boolean | number, auto = true): void => {
         let stepValue = currentStep;
         if (nextStep === true) {
             stepValue += 1;
@@ -135,7 +152,7 @@ const useTutorialTourTipManager = ({
             stepValue = nextStep;
         }
         handleHide();
-        savePreferences(currentUserId, stepValue.toString());
+        savePreferences(currentUserId, stepValue.toString(), auto);
         if (onNextNavigateTo && nextStep === true && autoTour) {
             onNextNavigateTo();
         } else if (onPrevNavigateTo && nextStep === false && autoTour) {
@@ -187,7 +204,6 @@ const useTutorialTourTipManager = ({
         show,
         tourSteps,
         handleOpen,
-        handleHide,
         handleDismiss,
         handleNext,
         handlePrevious,
